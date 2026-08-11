@@ -1,0 +1,40 @@
+# 构建上下文瘦身：只保留后端代码 + 依赖清单 + 下载脚本
+.git
+.idea
+.vscode
+
+# 后端本地环境
+backend/.venv
+backend/*.db
+backend/*.db-journal
+backend/*.sqlite
+backend/uploads
+backend/logs
+backend/.env
+
+# 前端
+frontend/node_modules
+frontend/dist
+frontend/.vite
+
+# 本地基础设施数据
+infra/models
+infra/qdrant/storage
+infra/qdrant/*.exe
+
+# 演示与部署工件
+demo_data
+deploy/frontend_dist
+deploy/.env.production
+deploy/qdrant_data
+deploy/data
+deploy/models
+
+# 服务器构建上下文（/opt/rag-kb）根目录的运行时产物——避免重新打包
+data
+models
+qdrant_data
+frontend_dist
+.env.production
+
+*.log

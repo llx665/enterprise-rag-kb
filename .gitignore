@@ -1,0 +1,47 @@
+# ===== 安全：敏感配置绝不入库 =====
+backend/.env
+deploy/.env
+deploy/.env.production
+deploy/server_secrets.py
+
+# ===== 前端构建产物（deploy 目录下的副本）=====
+deploy/frontend_dist/
+
+# ===== Python =====
+backend/.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ===== 数据库（本地开发）=====
+backend/*.db
+backend/*.db-journal
+backend/*.sqlite
+backend/tests/*.db
+
+# ===== Node =====
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# ===== IDE / 系统 =====
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# ===== 日志 =====
+*.log
+backend/logs/
+
+# ===== 本地基础设施数据（向量模型 / Qdrant 数据）=====
+infra/models/
+infra/qdrant/storage/
+infra/qdrant/*.exe
+infra/qdrant/.qdrant-initialized
+
+# ===== 运行时上传文件（知识库落盘副本，源文件见 demo_data/）=====
+backend/uploads/

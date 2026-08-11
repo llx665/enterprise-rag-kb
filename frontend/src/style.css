@@ -1,0 +1,197 @@
+/* ============ 全局样式 ============ */
+:root {
+  --sidebar-width: 220px;
+  --primary: #3b82f6;
+  --primary-hover: #2563eb;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+  font-size: 14px;
+  color: #303133;
+  background: #f5f7fa;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------- 认证页（登录/注册） ---------- */
+.auth-page {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 55%, #60a5fa 100%);
+}
+
+.auth-card {
+  width: 400px;
+  padding: 40px 36px 32px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+}
+
+.auth-title {
+  text-align: center;
+  font-size: 22px;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0 0 6px;
+}
+
+.auth-subtitle {
+  text-align: center;
+  font-size: 13px;
+  color: #9ca3af;
+  margin-bottom: 28px;
+}
+
+/* ---------- 主布局 ---------- */
+.app-container {
+  height: 100%;
+}
+
+.sidebar {
+  background: #1f2937;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.logo {
+  height: 60px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 20px;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+}
+
+.sidebar .el-menu {
+  border-right: none;
+  background: transparent;
+  flex: 1;
+}
+
+.sidebar .el-menu-item {
+  color: #9ca3af;
+}
+
+.sidebar .el-menu-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+}
+
+.sidebar .el-menu-item.is-active {
+  background: var(--primary);
+  color: #fff;
+}
+
+.sidebar-footer {
+  padding: 12px 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+}
+
+.user-entry {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #d1d5db;
+  cursor: pointer;
+  padding: 6px 8px;
+  border-radius: 6px;
+}
+
+.user-entry:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.user-name {
+  flex: 1;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.main-content {
+  background: #f5f7fa;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* ---------- Markdown 渲染（问答回答正文） ---------- */
+.markdown-body {
+  line-height: 1.75;
+  font-size: 14px;
+  color: #374151;
+}
+
+.markdown-body p {
+  margin: 0 0 12px;
+}
+
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4 {
+  margin: 18px 0 10px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.markdown-body ul,
+.markdown-body ol {
+  padding-left: 22px;
+  margin: 0 0 12px;
+}
+
+.markdown-body pre {
+  background: #f3f4f6;
+  border-radius: 8px;
+  padding: 12px 16px;
+  overflow-x: auto;
+  margin: 0 0 12px;
+}
+
+.markdown-body code {
+  font-family: Consolas, 'Courier New', monospace;
+  font-size: 13px;
+  background: #f3f4f6;
+  padding: 2px 5px;
+  border-radius: 4px;
+}
+
+.markdown-body pre code {
+  padding: 0;
+  background: none;
+}
+
+.markdown-body blockquote {
+  margin: 0 0 12px;
+  padding: 8px 16px;
+  border-left: 3px solid var(--primary);
+  background: #eff6ff;
+  border-radius: 0 6px 6px 0;
+}
+
+.markdown-body a {
+  color: var(--primary);
+}
