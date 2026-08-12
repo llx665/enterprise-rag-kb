@@ -21,12 +21,19 @@ async def migrate() -> None:
     """轻量迁移：为新加字段补列（create_all 不会改已有表）。"""
     async with engine.begin() as conn:
         # SQLite 不支持 ADD COLUMN IF NOT EXISTS，用异常吞掉"已存在"
-        try:
-            await conn.exec_driver_sql(
-                "ALTER TABLE messages ADD COLUMN cached BOOLEAN NOT NULL DEFAULT 0"
-            )
-        except Exception:
-            pass
+        for stmt in (
+            # 历史遗留：消息缓存标记
+            "ALTER TABLE messages ADD COLUMN cached BOOLEAN NOT NULL DEFAULT 0",
+            # 父子分块：父块全文（旧库补空列，检索时回退 content）
+            "ALTER TABLE document_chunks ADD COLUMN parent_content TEXT",
+            # 会话记忆滚动摘要
+            "ALTER TABLE sessions ADD COLUMN summary TEXT",
+            "ALTER TABLE sessions ADD COLUMN summary_until_id INTEGER",
+        ):
+            try:
+                await conn.exec_driver_sql(stmt)
+            except Exception:
+                pass
 
 
 async def seed_admin() -> None:

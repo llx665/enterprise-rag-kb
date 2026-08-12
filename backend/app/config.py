@@ -70,6 +70,13 @@ class Settings(BaseSettings):
     RERANK_MODEL_PATH: str = "../infra/models/bge-reranker-base"
     RERANK_TOP_N: int = 6                 # 重排序后保留的最终候选数
 
+    # ---------- MCP（Model Context Protocol）----------
+    # 把知识库问答能力暴露为 MCP 工具，供 Claude Code / Claude Desktop / Cursor 等客户端直连
+    MCP_SERVER_NAME: str = "rag-kb-mcp"
+    # HTTP 运输模式（python run_mcp_server.py --transport http）的可选鉴权 Token；
+    # 为空 = 不鉴权（仅建议本机使用），设置后要求请求头 Authorization: Bearer <token>
+    MCP_HTTP_TOKEN: str = ""
+
     # ---------- 接口限流 ----------
     RATE_LIMIT_ENABLED: bool = True
 
@@ -82,6 +89,20 @@ class Settings(BaseSettings):
     CHUNK_SIZE: int = 800                 # 分块大小（字符）
     CHUNK_OVERLAP: int = 120              # 分块重叠（保证上下文连续）
     RETRIEVE_TOP_K: int = 8               # RAG 检索返回的候选块数量
+
+    # ---------- 父子分块（small-to-big）----------
+    # 子块参与向量检索，父块全文作为 LLM 上下文。关闭则退化为纯扁平分块。
+    PARENT_CHILD_ENABLED: bool = True
+
+    # ---------- Self-RAG 两轮自省 ----------
+    # draft 生成后由 critic LLM 对照参考资料校验，发现问题则重生成（最多 MAX_ROUNDS 轮）
+    SELF_RAG_ENABLED: bool = True
+    SELF_RAG_MAX_ROUNDS: int = 2
+
+    # ---------- 会话记忆滚动摘要 ----------
+    # 历史消息超过该条数后，把窗口之外的消息压缩进滚动摘要（DB sessions.summary 持久化）
+    MEMORY_SUMMARY_TRIGGER: int = 12
+    MEMORY_RECENT_LIMIT: int = 10         # 最近 N 条原始消息随摘要一起注入上下文
 
 
 @lru_cache

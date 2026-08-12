@@ -17,8 +17,8 @@ if hasattr(sys.stdout, "reconfigure"):
 
 import httpx
 
-BASE = "http://localhost:8000/api"
-DEMO_DIR = "../demo_data"
+BASE = os.environ.get("SEED_BASE_URL", "http://localhost:8000/api")
+DEMO_DIR = os.environ.get("DEMO_DIR", "../demo_data")
 
 
 def login(client: httpx.Client) -> dict:
@@ -36,6 +36,18 @@ def delete_all(client: httpx.Client, headers: dict) -> None:
         print("  无旧文档")
 
 
+def mime_for(name: str) -> str:
+    """按扩展名映射 MIME 类型（代码文件走 octet-stream，其余用常见类型）。"""
+    ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
+    return {
+        "md": "text/markdown",
+        "txt": "text/plain",
+        "pdf": "application/pdf",
+        "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    }.get(ext, "application/octet-stream")
+
+
 def main() -> None:
     with httpx.Client(timeout=120) as client:
         headers = login(client)
@@ -44,8 +56,9 @@ def main() -> None:
         print("\n=== 清理旧知识库 ===")
         delete_all(client, headers)
 
-        print("\n=== 上传演示文档 ===")
-        files = sorted(glob.glob(f"{DEMO_DIR}/*.md"))
+        print("\n=== 上传演示文档（逐个上传，等 ready 再传下一个）===")
+        files = sorted(glob.glob(f"{DEMO_DIR}/*"))
+        files = [f for f in files if os.path.isfile(f)]
         for fp in files:
             # Windows 路径是反斜杠，用 basename 取纯文件名
             name = os.path.basename(fp)
@@ -53,24 +66,27 @@ def main() -> None:
                 r = client.post(
                     f"{BASE}/kb/documents",
                     headers=headers,
-                    files={"file": (name, f, "text/markdown")},
+                    files={"file": (name, f, mime_for(name))},
                 )
-            if r.status_code == 201:
-                print(f"  ✅ {name} (id={r.json()['id']}) 已上传，后台处理中")
-            else:
+            if r.status_code != 201:
                 print(f"  ❌ {name} 上传失败: {r.status_code} {r.text[:120]}")
+                continue
+            doc_id = r.json()["id"]
+            print(f"  {name} (id={doc_id}) 已上传，等待处理…")
 
-        # ---------- 轮询直到全部处理完成 ----------
-        print("\n=== 等待后台处理（分块 + 向量化）===")
-        for _ in range(60):
-            time.sleep(2)
-            docs = client.get(f"{BASE}/kb/documents", headers=headers, params={"page_size": 100}).json()
-            pending = [d for d in docs["items"] if d["status"] != "ready"]
-            failed = [d for d in docs["items"] if d["status"] in ("failed", "error")]
-            if not pending:
-                break
-            print(f"  处理中... 剩余 {len(pending)} 个文档", end="\r")
-        print()
+            # 轮询等待当前文档处理完成（单线程向量化，内存友好）
+            ok = False
+            for _ in range(120):
+                time.sleep(3)
+                d = client.get(f"{BASE}/kb/documents/{doc_id}", headers=headers).json()
+                if d["status"] == "ready":
+                    ok = True
+                    break
+                if d["status"] in ("failed", "error"):
+                    print(f"  ❌ {name} 处理失败: {d.get('error_message', '')[:120]}")
+                    break
+            if ok:
+                print(f"  ✅ {name} ready（块数: {d.get('chunk_count', '?')}）")
 
         stats = client.get(f"{BASE}/kb/stats", headers=headers).json()
         print("\n=== 知识库最终状态 ===")

@@ -144,11 +144,18 @@ async function sendMessage() {
       botMsg.tools.push(info.display || info.name)
       scrollToBottom()
     },
+    onStatus: (info) => {
+      // Self-RAG 阶段提示（如“正在核对回答准确性…”），复用工具状态标签渲染
+      if (!botMsg.tools) botMsg.tools = []
+      botMsg.tools.push(info.message || info.stage)
+      scrollToBottom()
+    },
     onDone: (payload) => {
       botMsg.streaming = false
       botMsg.id = payload.message_id
       botMsg.latency_ms = payload.latency_ms
       botMsg.cached = payload.cached
+      botMsg.reflection = payload.reflection
       if (!currentSessionId) {
         // 首个问题：后端自动创建了会话，回填会话 ID
         activeSessionId.value = payload.session_id

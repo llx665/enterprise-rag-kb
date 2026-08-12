@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "rag-kb": {
+      "command": "python",
+      "args": ["backend/run_mcp_server.py"]
+    }
+  }
+}

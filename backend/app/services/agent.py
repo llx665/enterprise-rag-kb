@@ -72,7 +72,7 @@ def format_tool_display(name: str, args: dict) -> str:
     return f"{label}：{detail}" if detail else label
 
 
-async def stream_agent(question: str, history: list[dict]):
+async def stream_agent(question: str, history: list[dict], summary: str | None = None):
     """运行 Agent 并逐事件产出。
 
     Yields:
@@ -96,6 +96,9 @@ async def stream_agent(question: str, history: list[dict]):
         )
     )
     messages: list = [date_hint]
+    # 滚动摘要（更早对话的压缩记忆），Agent 同样受益于长程记忆
+    if summary:
+        messages.append(SystemMessage(content=f"更早对话摘要：{summary}"))
     for msg in history:
         if msg["role"] == "user":
             messages.append(HumanMessage(content=msg["content"]))

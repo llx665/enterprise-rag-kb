@@ -65,6 +65,17 @@ async function handleFeedback(type) {
           <div v-if="message.tools?.length" class="tool-list">
             <div v-for="(t, i) in message.tools" :key="i" class="tool-chip">🔧 {{ t }}</div>
           </div>
+          <!-- Self-RAG 自省信息：修正过则提示，并列出发现的问题 -->
+          <div
+            v-if="message.reflection?.revised"
+            class="tool-list"
+          >
+            <el-tag size="small" type="warning" class="tool-chip">
+              🔍 Self-RAG 已自省修正（{{ message.reflection.rounds }} 轮）{{
+                message.reflection.issues?.length ? `：${message.reflection.issues.join('；')}` : ''
+              }}
+            </el-tag>
+          </div>
           <MarkdownView :content="message.content" />
           <span v-if="isStreaming" class="stream-cursor">▍</span>
         </template>

@@ -5,14 +5,14 @@
 #   - 数据用 SQLite（单实例足够，架构上可随时切 PostgreSQL）
 #   - 语义缓存/限流降级为进程内存实现
 #   - Qdrant 向量库保留（生产核心组件）
-# 访问：http://<服务器IP>:8083
+# 访问：http://<服务器IP>（容器 nginx 直接映射 80 与 8083）
 # ==========================================================
 services:
   # ---------- 向量数据库 ----------
   qdrant:
     image: docker.m.daocloud.io/qdrant/qdrant:v1.19.0
     restart: unless-stopped
-    mem_limit: 384m
+    mem_limit: 256m
     volumes:
       - ./qdrant_data:/qdrant/storage
     # 仅内网访问，不暴露公网端口
@@ -25,11 +25,15 @@ services:
       context: .              # /opt/rag-kb（含 backend/ scripts/ 等）
       dockerfile: backend/Dockerfile
     restart: unless-stopped
-    mem_limit: 768m
+    mem_limit: 1100m
     env_file: .env.production
     environment:
       # 容器内网地址，覆盖 .env.production 中的默认值
       QDRANT_URL: http://qdrant:6333
+      # torch CPU 强制单线程：大幅降低峰值内存与换页抖动（1.6G 小机关键）
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      TOKENIZERS_PARALLELISM: "false"
     volumes:
       - ./data:/data              # SQLite + 上传文件
       - ./models:/models          # bge 向量模型（首次启动自动下载）
@@ -45,6 +49,8 @@ services:
     restart: unless-stopped
     mem_limit: 128m
     ports:
+      # 直接暴露 80（http://<IP>/）与 8083（http://<IP>:8083/）双入口
+      - "80:80"
       - "8083:80"
     volumes:
       - ./frontend_dist:/usr/share/nginx/html:ro

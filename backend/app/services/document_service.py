@@ -13,8 +13,8 @@ from ..config import settings
 from ..database import SessionLocal
 from ..models import Document, DocumentChunk
 from . import vector_store
-from .chunker import split_text
-from .document_parser import parse_document
+from .chunker import split_text_structured
+from .document_parser import CODE_LANG, parse_document
 from .embedding import get_embeddings
 
 UPLOAD_DIR = Path(settings.UPLOAD_DIR)
@@ -42,32 +42,39 @@ async def process_document(doc_id: int) -> None:
             path = UPLOAD_DIR / doc.stored_name
             text = await asyncio.to_thread(parse_document, doc.filename, path)
 
-            # 2. 分块
-            chunks = split_text(text)
+            # 2. 分块（父子分块：子块检索、父块作 LLM 上下文；代码文件按语言顶层定义切块）
+            language = CODE_LANG.get(doc.file_type) if doc.file_type else None
+            chunk_items = split_text_structured(text, language=language)
+            chunks = [i.child for i in chunk_items]
             if not chunks:
                 raise ValueError("文档内容为空或无法提取文本")
 
             # 3. 向量化 + 写入向量库
-            embeddings = get_embeddings()
+            # 首次会同步加载 torch 模型（最重的操作），必须切线程池避免阻塞事件循环
+            embeddings = await asyncio.to_thread(get_embeddings)
             await vector_store.ensure_collection()
 
             points: list[dict] = []
             batch_size = 64
             for i in range(0, len(chunks), batch_size):
                 batch = chunks[i : i + batch_size]
+                items = chunk_items[i : i + batch_size]
                 # 异步批量向量化
                 vectors = await embeddings.aembed_documents(batch)
-                for j, (chunk_text, vector) in enumerate(zip(batch, vectors)):
+                for j, (chunk_text, vector, item) in enumerate(zip(batch, vectors, items)):
+                    payload = {
+                        "doc_id": doc.id,
+                        "filename": doc.filename,
+                        "chunk_index": i + j,
+                        "content": chunk_text,
+                    }
+                    if settings.PARENT_CHILD_ENABLED:
+                        payload["parent_content"] = item.parent
                     points.append(
                         {
                             "point_id": str(uuid.uuid4()),
                             "vector": vector,
-                            "payload": {
-                                "doc_id": doc.id,
-                                "filename": doc.filename,
-                                "chunk_index": i + j,
-                                "content": chunk_text,
-                            },
+                            "payload": payload,
                         }
                     )
 
@@ -80,6 +87,7 @@ async def process_document(doc_id: int) -> None:
                         doc_id=doc.id,
                         chunk_index=p["payload"]["chunk_index"],
                         content=p["payload"]["content"],
+                        parent_content=p["payload"].get("parent_content"),
                         token_count=len(p["payload"]["content"]),
                         qdrant_point_id=p["point_id"],
                     )

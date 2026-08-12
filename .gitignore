@@ -9,6 +9,7 @@ deploy/frontend_dist/
 
 # ===== Python =====
 backend/.venv/
+scripts/.venv-eval/
 __pycache__/
 *.pyc
 *.pyo

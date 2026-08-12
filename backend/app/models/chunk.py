@@ -19,6 +19,8 @@ class DocumentChunk(Base):
     # 在文档内的分块序号
     chunk_index: Mapped[int] = mapped_column(Integer, default=0)
     content: Mapped[str] = mapped_column(Text, nullable=False)
+    # 父块全文（父子分块：子块检索、父块作 LLM 上下文）。旧块为 NULL，检索时回退 content
+    parent_content: Mapped[str | None] = mapped_column(Text, nullable=True)
     token_count: Mapped[int] = mapped_column(Integer, default=0)
     # 对应的 Qdrant 向量点位 ID（向量库中的唯一标识）
     qdrant_point_id: Mapped[str | None] = mapped_column(String(100), nullable=True)

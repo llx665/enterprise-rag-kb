@@ -5,11 +5,12 @@ const BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'
 /**
  * SSE 流式问答。
  * @param {Function} onTool 工具调用状态回调（Agent 路径，如“正在查询天气”）
+ * @param {Function} onStatus Self-RAG 阶段回调（RAG 路径，如“正在核对回答准确性…”）
  * @param {Function} onFinish 兜底回调：流结束 / 出错 / 手动中断时都会触发，
  *                            用于复位发送状态，避免输入框卡死。
  * @returns {AbortController} 用于中断请求
  */
-export function streamChat({ sessionId, question, onMeta, onDelta, onTool, onDone, onError, onFinish }) {
+export function streamChat({ sessionId, question, onMeta, onDelta, onTool, onStatus, onDone, onError, onFinish }) {
   const authStore = useAuthStore()
   const controller = new AbortController()
 
@@ -40,7 +41,7 @@ export function streamChat({ sessionId, question, onMeta, onDelta, onTool, onDon
           const blocks = buffer.split('\n\n')
           buffer = blocks.pop()
           for (const block of blocks) {
-            parseEvent(block, { onMeta, onDelta, onTool, onDone, onError })
+            parseEvent(block, { onMeta, onDelta, onTool, onStatus, onDone, onError })
           }
         }
       } finally {
@@ -83,6 +84,9 @@ function parseEvent(block, handlers) {
       break
     case 'tool':
       handlers.onTool?.(payload)
+      break
+    case 'status':
+      handlers.onStatus?.(payload)
       break
     case 'done':
       handlers.onDone?.(payload)

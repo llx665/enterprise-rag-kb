@@ -41,6 +41,8 @@ async def _dense_retrieve(query: str, limit: int, vector: list[float] | None) ->
             "doc_name": h.payload.get("filename", ""),
             "chunk_index": h.payload.get("chunk_index", 0),
             "content": h.payload.get("content", ""),
+            # 父子分块：父块全文作 LLM 上下文；旧数据无该字段时为空串，由 rag_chain 回退 content
+            "parent_content": h.payload.get("parent_content", ""),
             "score": h.score,
         }
         for h in hits
@@ -70,7 +72,14 @@ async def _load_corpus() -> list[tuple]:
                 .order_by(DocumentChunk.id)
             )
             _corpus_cache["rows"] = [
-                (c.id, c.doc_id, c.document.filename, c.chunk_index, c.content)
+                (
+                    c.id,
+                    c.doc_id,
+                    c.document.filename,
+                    c.chunk_index,
+                    c.content,
+                    c.parent_content or "",  # 旧块无父块，空串让 BM25 命中走 content 兜底
+                )
                 for c in rows
             ]
             _corpus_cache["version"] = version
@@ -97,13 +106,14 @@ def _bm25_search(rows: list[tuple], query: str, limit: int) -> list[dict]:
     for i in ranked_idx:
         if scores[i] <= 0:  # 与查询零重叠的直接截断
             break
-        _id, doc_id, doc_name, chunk_index, content = rows[i]
+        _id, doc_id, doc_name, chunk_index, content, parent_content = rows[i]
         hits.append(
             {
                 "doc_id": doc_id,
                 "doc_name": doc_name,
                 "chunk_index": chunk_index,
                 "content": content,
+                "parent_content": parent_content,
                 "score": round(float(scores[i]), 4),
             }
         )

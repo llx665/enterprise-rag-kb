@@ -23,23 +23,20 @@ import time
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select
+from sqlalchemy import func
 
 from ..config import settings
 from ..core.deps import CurrentUser, DbDep
 from ..core.limiter import limiter
 from ..models import ChatSession, Message
 from ..schemas.message import ChatRequest
-from ..services import rag_chain
+from ..services import memory, rag_chain, self_rag
 from ..services.agent import format_tool_display, stream_agent
 from ..services.cache import get_cache
 from ..services.embedding import get_embeddings
 from ..services.router import is_tool_intent
 
 router = APIRouter(prefix="/chat", tags=["问答"])
-
-# 拼入上下文的历史消息条数上限（多轮记忆，同时避免上下文过长）
-HISTORY_LIMIT = 20
 
 
 def _sse(event: str, data: dict) -> str:
@@ -89,17 +86,8 @@ async def chat(request: Request, req: ChatRequest, user: CurrentUser, db: DbDep)
     await db.commit()
     await db.refresh(user_msg)
 
-    # ---------- 3. 加载历史（排除刚保存的当前提问） ----------
-    history_rows = await db.scalars(
-        select(Message)
-        .where(Message.session_id == session.id, Message.id < user_msg.id)
-        .order_by(Message.id.desc())
-        .limit(HISTORY_LIMIT)
-    )
-    history = [
-        {"role": m.role, "content": m.content}
-        for m in reversed(list(history_rows))
-    ]
+    # ---------- 3. 加载会话记忆（滚动摘要 + 最近窗口原文，排除当前提问） ----------
+    summary, history = await memory.get_session_memory(db, session, exclude_id=user_msg.id)
 
     async def save_answer(
         content: str, citations: list, latency_ms: int, cached: bool = False
@@ -130,7 +118,7 @@ async def chat(request: Request, req: ChatRequest, user: CurrentUser, db: DbDep)
             if is_tool_intent(req.question):
                 content_parts: list[str] = []
                 start = time.perf_counter()
-                async for ev in stream_agent(req.question, history):
+                async for ev in stream_agent(req.question, history, summary=summary):
                     if ev["type"] == "tool":
                         # 工具调用前的模型过渡文字不是最终答案，丢弃重来
                         content_parts.clear()
@@ -149,6 +137,8 @@ async def chat(request: Request, req: ChatRequest, user: CurrentUser, db: DbDep)
                 if not answer:
                     answer = "抱歉，我暂时无法处理该问题。"
                 assistant_msg = await save_answer(answer, [], latency_ms)
+                # 历史超阈值时折叠窗口外消息（失败静默降级）
+                await memory.maybe_compress(db, session)
                 yield _sse(
                     "done",
                     {
@@ -178,6 +168,8 @@ async def chat(request: Request, req: ChatRequest, user: CurrentUser, db: DbDep)
                 for i in range(0, len(answer), 20):
                     yield _sse("delta", {"content": answer[i : i + 20]})
                 assistant_msg = await save_answer(answer, citations, 0, cached=True)
+                # 缓存命中同样完成本轮记忆折叠（不调用 LLM 回答但对话轮数照常累计）
+                await memory.maybe_compress(db, session)
                 yield _sse(
                     "done",
                     {
@@ -190,27 +182,47 @@ async def chat(request: Request, req: ChatRequest, user: CurrentUser, db: DbDep)
                 )
                 return
 
-            # ---------- 4. 混合检索 + LLM 生成 ----------
+            # ---------- 4. 混合检索 + Self-RAG 自省生成 ----------
             hits = await rag_chain.retrieve(req.question, vector=qvec)
             citations = rag_chain.hits_to_citations(hits)
-            context = rag_chain.format_context(hits)
-            messages = rag_chain.build_messages(req.question, history, context)
 
             # 先推送引用元数据，前端据此渲染引用锚点
             yield _sse("meta", {"citations": citations})
 
-            content_parts: list[str] = []
+            # Self-RAG 需要完整草稿才能自省，先缓冲生成再按 20 字符分块推送；
+            # 阶段事件通知前端当前进度（组织回答 / 核对事实 / 修正）。
+            status_events: list[str] = []
+            _STAGE_LABELS = {
+                "generating": "正在组织回答…",
+                "criticizing": "正在核对回答准确性…",
+                "revising": "正在修正回答…",
+            }
+
+            async def _on_stage(stage: str) -> None:
+                status_events.append(
+                    _sse("status", {"stage": stage, "message": _STAGE_LABELS.get(stage, stage)})
+                )
+
             start = time.perf_counter()
-            async for chunk in rag_chain.get_llm().astream(messages):
-                if chunk.content:
-                    content_parts.append(chunk.content)
-                    yield _sse("delta", {"content": chunk.content})
+            answer, reflection = await self_rag.self_rag_answer(
+                req.question, history, hits, on_stage=_on_stage, summary=summary
+            )
             latency_ms = int((time.perf_counter() - start) * 1000)
 
-            answer = "".join(content_parts)
+            if not answer.strip():
+                answer = "抱歉，知识库中暂无相关信息。"
+            # 依次补发阶段事件（均在推送回答文本之前，保持时序）
+            for ev in status_events:
+                yield ev
+            for i in range(0, len(answer), 20):
+                yield _sse("delta", {"content": answer[i : i + 20]})
+
             assistant_msg = await save_answer(answer, citations, latency_ms)
+            # 滚动摘要：历史超阈值时折叠窗口外消息（失败静默降级，不阻塞 done）
+            await memory.maybe_compress(db, session)
 
             # ---------- 5. 写入语义缓存（失败不影响主流程） ----------
+            # 只缓存自省后的最终答案，保证缓存命中的回答也是核对过的
             if settings.CACHE_ENABLED:
                 try:
                     await get_cache().set(qvec, req.question, answer, citations)
@@ -225,6 +237,7 @@ async def chat(request: Request, req: ChatRequest, user: CurrentUser, db: DbDep)
                     "title": session.title,
                     "latency_ms": latency_ms,
                     "cached": False,
+                    "reflection": reflection,
                 },
             )
 

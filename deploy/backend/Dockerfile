@@ -2,7 +2,7 @@
 # 后端镜像：FastAPI + LangChain RAG + 本地 bge 向量模型
 # 构建上下文 = 项目根目录（依赖根目录 .dockerignore 排除大文件）
 # 基础镜像走 DaoCloud 镜像（服务器无法直连 Docker Hub）
-# 用 Python 3.12：aliyun CPU torch 镜像暂缺 3.13 轮子
+# 向量模型为 ONNX Runtime 推理，无需 torch
 # ==========================================================
 FROM docker.m.daocloud.io/library/python:3.12-slim
 
@@ -13,12 +13,9 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-# ---------- CPU 版 PyTorch（官方 CPU index，约 180MB）----------
-# 必须先装：sentence-transformers 依赖 torch，若后装会从 PyPI 拉 2GB CUDA 包
-# （aliyun pytorch-wheels/cpu 镜像已失效，改用官方 CPU index，实测 14MB/s）
-RUN pip install torch --index-url https://download.pytorch.org/whl/cpu
-
 # ---------- Python 依赖（清华 PyPI 镜像，国内加速）----------
+# 注：向量模型用 ONNX Runtime 推理（embedding.py），不再安装 torch /
+# sentence-transformers —— 1.6G 小机装不下 torch，ONNX 导入仅 ~80MB。
 COPY backend/requirements.txt .
 RUN pip install -i https://pypi.tuna.tsinghua.edu.cn/simple -r requirements.txt
 

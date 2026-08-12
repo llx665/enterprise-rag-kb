@@ -192,13 +192,13 @@ onBeforeUnmount(stopPolling)
           :show-file-list="false"
           :http-request="handleUpload"
           :disabled="uploading"
-          accept=".pdf,.docx,.xlsx,.txt,.md"
+          accept=".pdf,.docx,.xlsx,.txt,.md,.py,.js,.ts,.tsx,.jsx,.java,.go,.cpp,.c,.h,.hpp,.cs,.rs,.rb,.php,.swift,.kt"
         >
           <el-button type="primary" :loading="uploading" :icon="UploadFilled">
             上传文档
           </el-button>
           <template #tip>
-            <div class="el-upload__tip">支持 PDF / Word / Excel / TXT / Markdown，单文件 ≤ 50MB</div>
+            <div class="el-upload__tip">支持 PDF / Word / Excel / TXT / Markdown / 常见代码文件，单文件 ≤ 50MB</div>
           </template>
         </el-upload>
         <el-select

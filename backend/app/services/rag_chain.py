@@ -69,11 +69,15 @@ def hits_to_citations(hits: list[dict]) -> list[dict]:
 
 
 def format_context(hits: list[dict]) -> str:
-    """把检索命中的片段格式化为带编号的参考资料。"""
+    """把检索命中的片段格式化为带编号的参考资料。
+
+    父子分块：LLM 上下文用「父块全文」（语义完整，不丢上下文）；
+    旧块无父块（parent_content 为空）时回退到子块 content。
+    """
     lines = []
     for i, h in enumerate(hits, start=1):
         source = h.get("doc_name", "未知来源")
-        content = h.get("content", "").strip()
+        content = (h.get("parent_content") or h.get("content") or "").strip()
         lines.append(f"[{i}] 来源：{source}\n{content}")
     return "\n\n".join(lines)
 
@@ -82,9 +86,17 @@ def build_messages(
     question: str,
     history: list[dict[str, Any]],
     context: str,
+    summary: str | None = None,
 ) -> list:
-    """组装对话消息：系统提示 + 历史对话 + 当前问题。"""
+    """组装对话消息：系统提示 + （可选滚动摘要） + 历史对话 + 当前问题。
+
+    summary 为更早对话的滚动摘要（会话记忆折叠后的产物），非空时注入
+    系统上下文，帮助模型记住早期诉求而不必重复。
+    """
     messages: list = [SystemMessage(content=SYSTEM_PROMPT.format(context=context))]
+    # 滚动摘要（更早对话的压缩记忆），放在历史消息之前
+    if summary:
+        messages.append(SystemMessage(content=f"更早对话摘要：{summary}"))
     # 历史对话（最近的若干轮），保持多轮语境
     for msg in history:
         if msg["role"] == "user":
