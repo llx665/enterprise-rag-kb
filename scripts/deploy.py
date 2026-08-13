@@ -148,7 +148,7 @@ def main() -> None:
 
     client.close()
     if ok:
-        print("\n🎉 部署完成，访问 http://47.101.151.35:8083")
+        print("\n🎉 部署完成，访问 http://47.101.151.35/")
         print("   管理员账号 admin / 123456")
 
 
